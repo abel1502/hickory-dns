@@ -8,12 +8,11 @@
 use crate::{
     proto::{
         ProtoError,
-        op::{Edns, Metadata, ResponseCode, emit_message_parts},
+        op::{Edns, Metadata, ResponseCode, emit_message_parts, Queries, MessageRequest},
         rr::{Record, rdata::TSIG},
         serialize::binary::BinEncoder,
     },
     server::ResponseInfo,
-    zone_handler::{Queries, message_request::MessageRequest},
 };
 
 /// A [`crate::proto::serialize::binary::BinEncodable`] message with borrowed data for
