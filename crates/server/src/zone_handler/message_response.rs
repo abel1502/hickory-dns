@@ -8,7 +8,7 @@
 use crate::{
     proto::{
         ProtoError,
-        op::{Edns, Metadata, ResponseCode, emit_message_parts, Queries, MessageRequest},
+        op::{Edns, MessageRequest, Metadata, Queries, ResponseCode, emit_message_parts},
         rr::{Record, rdata::TSIG},
         serialize::binary::BinEncoder,
     },
