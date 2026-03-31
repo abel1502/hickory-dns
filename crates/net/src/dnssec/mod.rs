@@ -723,7 +723,7 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
             }
 
             // Make an un-verified request for the NS RRset at this ancestor name.
-            let query = Query::query(ancestor.clone(), RecordType::NS);
+            let query = Query::new(ancestor.clone(), RecordType::NS);
             let result = self
                 .handle
                 .lookup(query.clone(), options)
@@ -760,7 +760,7 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
         options: DnsRequestOptions,
     ) -> Result<Vec<Record<DS>>, ProofError> {
         let ds_message = self
-            .lookup(Query::query(zone.clone(), RecordType::DS), options)
+            .lookup(Query::new(zone.clone(), RecordType::DS), options)
             .first_answer()
             .await;
 
@@ -954,7 +954,7 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
             .enumerate()
             .filter_map(|(i, rrsig)| {
                 let query =
-                    Query::query(rrsig.data().input().signer_name.clone(), RecordType::DNSKEY);
+                    Query::new(rrsig.data().input().signer_name.clone(), RecordType::DNSKEY);
 
                 if i > MAX_RRSIGS_PER_RRSET {
                     warn!("too many ({i}) RRSIGs for rrset {rrset:?}; skipping");
@@ -2020,7 +2020,7 @@ mod test {
         // Based on RFC 4035 B.2 - Name Error
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ml.example.")?, A),
+                &Query::new(Name::from_ascii("ml.example.")?, A),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NXDomain,
                 &[],
@@ -2047,7 +2047,7 @@ mod test {
         // Single NSEC that proves the record does not exist, and no covering wildcard exists.
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.example.")?, A),
+                &Query::new(Name::from_ascii("a.example.")?, A),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NXDomain,
                 &[],
@@ -2068,7 +2068,7 @@ mod test {
         subscribe();
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ml.example.")?, A),
+                &Query::new(Name::from_ascii("ml.example.")?, A),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NXDomain,
                 &[],
@@ -2096,7 +2096,7 @@ mod test {
         // Test without proving wildcard non-existence.
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ml.example.")?, A),
+                &Query::new(Name::from_ascii("ml.example.")?, A),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NXDomain,
                 &[],
@@ -2114,7 +2114,7 @@ mod test {
         // Invalid SOA
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ml.example.")?, A),
+                &Query::new(Name::from_ascii("ml.example.")?, A),
                 Some(&Name::from_ascii("example2.")?),
                 ResponseCode::NXDomain,
                 &[],
@@ -2149,7 +2149,7 @@ mod test {
         // Based on RFC 4035 B.3 - No Data Error
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ns1.example.")?, MX),
+                &Query::new(Name::from_ascii("ns1.example.")?, MX),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2168,7 +2168,7 @@ mod test {
         // Record type at the SOA does not exist.
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("example.")?, MX),
+                &Query::new(Name::from_ascii("example.")?, MX),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2194,7 +2194,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ns1.example.")?, MX),
+                &Query::new(Name::from_ascii("ns1.example.")?, MX),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2211,7 +2211,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ns1.example.")?, MX),
+                &Query::new(Name::from_ascii("ns1.example.")?, MX),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2229,7 +2229,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("ns1.example.")?, MX),
+                &Query::new(Name::from_ascii("ns1.example.")?, MX),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2283,7 +2283,7 @@ mod test {
         // Based on RFC 4035 B.6 - Wildcard Expansion
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.z.w.example.")?, MX),
+                &Query::new(Name::from_ascii("a.z.w.example.")?, MX),
                 None,
                 ResponseCode::NoError,
                 &answers,
@@ -2302,7 +2302,7 @@ mod test {
         // This response could not have been synthesized from the query name (z.example can't be expanded from *.w.example
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("z.example.")?, MX),
+                &Query::new(Name::from_ascii("z.example.")?, MX),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &answers,
@@ -2363,7 +2363,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.z.w.example.")?, MX),
+                &Query::new(Name::from_ascii("a.z.w.example.")?, MX),
                 None,
                 ResponseCode::NoError,
                 &answers,
@@ -2380,7 +2380,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.z.w.example.")?, MX),
+                &Query::new(Name::from_ascii("a.z.w.example.")?, MX),
                 None,
                 ResponseCode::NoError,
                 &answers,
@@ -2399,7 +2399,7 @@ mod test {
         // Based on RFC 4035 B.7 - Wildcard No Data Error
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.z.w.example.")?, AAAA),
+                &Query::new(Name::from_ascii("a.z.w.example.")?, AAAA),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2422,7 +2422,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("zzzzzz.hickory-dns.testing.")?, TXT),
+                &Query::new(Name::from_ascii("zzzzzz.hickory-dns.testing.")?, TXT),
                 Some(&Name::from_ascii("hickory-dns.testing.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2458,7 +2458,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.z.w.example.")?, AAAA),
+                &Query::new(Name::from_ascii("a.z.w.example.")?, AAAA),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2480,7 +2480,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("a.z.w.example.")?, AAAA),
+                &Query::new(Name::from_ascii("a.z.w.example.")?, AAAA),
                 Some(&Name::from_ascii("example.")?),
                 ResponseCode::NoError,
                 &[],
@@ -2502,7 +2502,7 @@ mod test {
 
         assert_eq!(
             verify_nsec(
-                &Query::query(Name::from_ascii("r.hickory-dns.testing.")?, TXT),
+                &Query::new(Name::from_ascii("r.hickory-dns.testing.")?, TXT),
                 Some(&Name::from_ascii("hickory-dns.testing.")?),
                 ResponseCode::NoError,
                 &[],
