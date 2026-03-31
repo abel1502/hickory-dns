@@ -8,7 +8,9 @@
 use crate::{
     proto::{
         ProtoError,
-        op::{Edns, MessageRequest, Metadata, Queries, ResponseCode, emit_message_parts},
+        op::{
+            Edns, MessageRequest, Metadata, NoQueries, Queries, ResponseCode, emit_message_parts,
+        },
         rr::{Record, rdata::TSIG},
         serialize::binary::BinEncoder,
     },
@@ -28,7 +30,7 @@ where
     Additionals: Iterator<Item = &'a Record> + Send + 'a,
 {
     metadata: Metadata,
-    queries: &'q Queries,
+    queries: Option<&'q Queries>,
     answers: Answers,
     authorities: Authorities,
     soa: Soa,
@@ -80,7 +82,10 @@ where
 
         let header = emit_message_parts(
             &self.metadata,
-            &mut self.queries.as_emit_and_count(),
+            &mut match self.queries {
+                Some(queries) => queries.as_emit_and_count(),
+                None => NoQueries.as_emit_and_count(),
+            },
             &mut self.answers,
             &mut authorities,
             &mut self.additionals,
@@ -95,7 +100,7 @@ where
 
 /// A builder for MessageResponses
 pub struct MessageResponseBuilder<'q> {
-    queries: &'q Queries,
+    queries: Option<&'q Queries>,
     signature: Option<Box<Record<TSIG>>>,
     edns: Option<&'q Edns>,
 }
@@ -131,7 +136,7 @@ impl<'q> MessageResponseBuilder<'q> {
     pub fn from_message_request(message: &'q MessageRequest) -> Self {
         Self::new(&message.queries, None)
     }
-    
+
     /// Constructs a new response builder
     ///
     /// # Arguments
@@ -140,7 +145,20 @@ impl<'q> MessageResponseBuilder<'q> {
     /// * `edns` - Optional Edns data to associate with the Response
     pub fn new(queries: &'q Queries, edns: Option<&'q Edns>) -> Self {
         MessageResponseBuilder {
-            queries,
+            queries: Some(queries),
+            signature: None,
+            edns,
+        }
+    }
+
+    /// Constructs a new response builder for a request with no queries
+    ///
+    /// # Arguments
+    ///
+    /// * `edns` - Optional Edns data to associate with the Response
+    pub fn no_queries(edns: Option<&'q Edns>) -> Self {
+        MessageResponseBuilder {
+            queries: None,
             signature: None,
             edns,
         }
@@ -242,7 +260,7 @@ mod tests {
     use std::net::Ipv4Addr;
     use std::str::FromStr;
 
-    use crate::proto::op::{Header, Message, MessageType, Metadata, OpCode};
+    use crate::proto::op::{Header, Message, MessageType, Metadata, OpCode, Query};
     use crate::proto::rr::{DNSClass, Name, RData, Record};
     use crate::proto::serialize::binary::{BinDecodable, BinDecoder, BinEncoder};
 
@@ -262,18 +280,20 @@ mod tests {
             );
             answer.dns_class = DNSClass::NONE;
 
-            let message = MessageResponse {
-                metadata: Metadata::new(10, MessageType::Response, OpCode::Query),
-                queries: &Queries::empty(),
-                answers: iter::repeat(&answer),
-                authorities: iter::once(&answer),
-                soa: iter::once(&answer),
-                additionals: iter::once(&answer),
-                signature: None,
-                edns: None,
-            };
+            let request = MessageRequest::mock(
+                Metadata::new(10, MessageType::Query, OpCode::Query),
+                Query::root(),
+            );
 
-            message
+            let response = MessageResponseBuilder::from_message_request(&request).build(
+                Metadata::new(10, MessageType::Response, OpCode::Query),
+                iter::repeat(&answer),
+                iter::repeat(&answer),
+                iter::repeat(&answer),
+                iter::repeat(&answer),
+            );
+
+            response
                 .destructive_emit(&mut encoder)
                 .expect("failed to encode");
         }
@@ -299,18 +319,20 @@ mod tests {
             );
             answer.dns_class = DNSClass::NONE;
 
-            let message = MessageResponse {
-                metadata: Metadata::new(10, MessageType::Response, OpCode::Query),
-                queries: &Queries::empty(),
-                answers: iter::empty(),
-                authorities: iter::repeat(&answer),
-                soa: iter::repeat(&answer),
-                additionals: iter::repeat(&answer),
-                signature: None,
-                edns: None,
-            };
+            let request = MessageRequest::mock(
+                Metadata::new(10, MessageType::Query, OpCode::Query),
+                Query::root(),
+            );
 
-            message
+            let response = MessageResponseBuilder::from_message_request(&request).build(
+                Metadata::new(10, MessageType::Response, OpCode::Query),
+                [],
+                iter::repeat(&answer),
+                iter::repeat(&answer),
+                iter::repeat(&answer),
+            );
+
+            response
                 .destructive_emit(&mut encoder)
                 .expect("failed to encode");
         }
@@ -368,7 +390,7 @@ mod tests {
         let header = Header::read(&mut decoder).unwrap();
         let msg = MessageRequest::read(&mut decoder, header).unwrap();
 
-        eprintln!("queries: {:?}", msg.queries.queries());
+        eprintln!("query: {:?}", msg.queries.inner);
 
         MessageResponseBuilder::new(&msg.queries, None)
             .build_no_records(Metadata::response_from_request(&msg.metadata))
