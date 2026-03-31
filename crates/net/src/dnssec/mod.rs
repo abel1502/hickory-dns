@@ -318,7 +318,7 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
                 }
 
                 // Return Ok if the zone is insecure
-                if let Err(err) = self.find_ds_records(query.name().clone(), options).await {
+                if let Err(err) = self.find_ds_records(query.name.clone(), options).await {
                     if err.proof == Proof::Insecure {
                         return Ok(message);
                     }
@@ -334,7 +334,7 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
         };
 
         if !nsec_proof.is_secure() {
-            debug!("returning Nsec error for {} {nsec_proof}", query.name());
+            debug!("returning Nsec error for {} {nsec_proof}", query.name);
             // TODO change this to remove the NSECs, like we do for the others?
             return Err(NetError::from(DnsError::Nsec {
                 query: Box::new(query.clone()),
@@ -841,12 +841,12 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
             if proof.is_insecure() {
                 debug!(
                     "marking {} as insecure based on insecure NSEC/NSEC3 proof",
-                    query.name()
+                    query.name
                 );
                 return Err(ProofError::new(
                     Proof::Insecure,
                     ProofErrorKind::DsResponseNsec {
-                        name: query.name().to_owned(),
+                        name: query.name.clone(),
                     },
                 ));
             }
@@ -963,14 +963,14 @@ impl<H: DnsHandle> DnssecDnsHandle<H> {
 
                 // TODO: Should this sig.signer_name should be confirmed to be in the same zone as the rrsigs and rrset?
                 // Break verification cycle
-                if query.name() == original_query.name()
-                    && query.query_type() == original_query.query_type()
+                if query.name == original_query.name
+                    && query.query_type == original_query.query_type
                 {
                     warn!(
-                        query_name = %query.name(),
-                        query_type = %query.query_type(),
-                        original_query_name = %original_query.name(),
-                        original_query_type = %original_query.query_type(),
+                        query_name = %query.name,
+                        query_type = %query.query_type,
+                        original_query_name = %original_query.name,
+                        original_query_type = %original_query.query_type,
                         "stopping verification cycle in verify_default_rrset",
                     );
                     return None;
@@ -1526,9 +1526,9 @@ impl<'a> RrsetVerificationContext<'a> {
     // cause cache misses.
     fn key(&self) -> ValidationCacheKey {
         let mut hasher = DefaultHasher::new();
-        self.query.name().hash(&mut hasher);
-        self.query.query_class().hash(&mut hasher);
-        self.query.query_type().hash(&mut hasher);
+        self.query.name.hash(&mut hasher);
+        self.query.query_class.hash(&mut hasher);
+        self.query.query_type.hash(&mut hasher);
         self.rrset.name.hash(&mut hasher);
         self.rrset.record_class.hash(&mut hasher);
         self.rrset.record_type.hash(&mut hasher);
@@ -1624,20 +1624,20 @@ fn verify_nsec(
     // we'll use that as the starting value for next_closest_encloser, otherwise, fall back to
     // the parent of the query name.
     let mut next_closest_encloser = if let Some(soa_name) = soa_name {
-        if !soa_name.zone_of(query.name()) {
+        if !soa_name.zone_of(&query.name) {
             return nsec1_yield(Proof::Bogus, "SOA record is for the wrong zone");
         }
         soa_name.clone()
     } else {
-        query.name().base_name()
+        query.name.base_name()
     };
 
     let have_answer = !answers.is_empty();
 
     // For a no data response with a directly matching NSEC record, we just need to verify the NSEC
     // type set does not contain the query type or CNAME.
-    if let Some((_, nsec_data)) = nsecs.iter().find(|(name, _)| query.name() == *name) {
-        return if nsec_data.type_set().contains(query.query_type())
+    if let Some((_, nsec_data)) = nsecs.iter().find(|(name, _)| &query.name == *name) {
+        return if nsec_data.type_set().contains(query.query_type)
             || nsec_data.type_set().contains(RecordType::CNAME)
         {
             nsec1_yield(Proof::Bogus, "direct match, record type should be present")
@@ -1652,7 +1652,7 @@ fn verify_nsec(
     }
 
     let Some((covering_nsec_name, covering_nsec_data)) =
-        find_nsec_covering_record(soa_name, query.name(), nsecs)
+        find_nsec_covering_record(soa_name, &query.name, nsecs)
     else {
         return nsec1_yield(
             Proof::Bogus,
@@ -1666,7 +1666,7 @@ fn verify_nsec(
     for seed_name in [covering_nsec_name, covering_nsec_data.next_domain_name()] {
         let mut candidate_name = seed_name.clone();
         while candidate_name.num_labels() > next_closest_encloser.num_labels() {
-            if candidate_name.zone_of(query.name()) {
+            if candidate_name.zone_of(&query.name) {
                 next_closest_encloser = candidate_name;
                 break;
             }
@@ -1709,14 +1709,14 @@ fn verify_nsec(
                 };
 
                 let rrsig_labels = rrsig.input().num_labels;
-                if rrsig_labels >= r.name.num_labels() || rrsig_labels >= query.name().num_labels() {
+                if rrsig_labels >= r.name.num_labels() || rrsig_labels >= query.name.num_labels() {
                     debug!(name = ?r.name, labels = ?r.name.num_labels(), rrsig_labels, "ignoring RRSIG for wildcard base name rrsig_labels >= labels");
                     return None;
                 }
 
                 let trimmed_name = r.name.trim_to(rrsig_labels as usize);
-                if !trimmed_name.zone_of(query.name()) {
-                    debug!(name = ?r.name, query_name = ?query.name(), "ignoring RRSIG for wildcard base name: RRSIG wildcard labels not a parent of query name");
+                if !trimmed_name.zone_of(&query.name) {
+                    debug!(name = ?r.name, query_name = ?query.name, "ignoring RRSIG for wildcard base name: RRSIG wildcard labels not a parent of query name");
                     return None;
                 }
 
@@ -1727,7 +1727,7 @@ fn verify_nsec(
         // For no data responses, we have to recover the base name from a wildcard NSEC record as there are no answer RRSIGs present.
         nsecs
             .iter()
-            .filter(|(name, _)| name.is_wildcard() && name.base_name().zone_of(query.name()))
+            .filter(|(name, _)| name.is_wildcard() && name.base_name().zone_of(&query.name))
             .min_by_key(|(name, _)| name.num_labels())
             .map(|(name, _)| (*name).clone())
     };
@@ -1743,13 +1743,8 @@ fn verify_nsec(
         Some((_, _))
             if response_code == ResponseCode::NoError
                 && have_answer
-                && no_closer_matches(
-                    query.name(),
-                    soa_name,
-                    nsecs,
-                    wildcard_base_name.as_ref(),
-                )
-                && find_nsec_covering_record(soa_name, query.name(), nsecs).is_some() =>
+                && no_closer_matches(&query.name, soa_name, nsecs, wildcard_base_name.as_ref())
+                && find_nsec_covering_record(soa_name, &query.name, nsecs).is_some() =>
         {
             nsec1_yield(
                 Proof::Secure,
@@ -1762,9 +1757,9 @@ fn verify_nsec(
             && response_code == ResponseCode::NoError
             && nsecs.iter().any(|(name, nsec_data)| {
                 name == &&wildcard_name
-                    && !nsec_data.type_set().contains(query.query_type())
+                    && !nsec_data.type_set().contains(query.query_type)
                     && !nsec_data.type_set().contains(RecordType::CNAME)
-                    && no_closer_matches(query.name(), soa_name, nsecs, wildcard_base_name.as_ref())
+                    && no_closer_matches(&query.name, soa_name, nsecs, wildcard_base_name.as_ref())
             }) =>
         {
             nsec1_yield(Proof::Secure, "no direct match, covering wildcard present")
@@ -1852,7 +1847,7 @@ pub(super) fn proof_log_yield(
 ) -> Proof {
     debug!(
         "{nsec_type} proof for {name}, returning {proof}: {msg}",
-        name = query.name()
+        name = query.name
     );
     proof
 }
