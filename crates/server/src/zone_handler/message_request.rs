@@ -14,7 +14,6 @@ use crate::{
             BinDecodable, BinDecoder, BinEncodable, BinEncoder, DecodeError, NameEncoding,
         },
     },
-    zone_handler::LookupError,
 };
 
 /// A Message which captures the data from an inbound request
@@ -200,10 +199,10 @@ impl Queries {
 
     /// Validate that this set of Queries contains exactly one Query, and return a reference to the
     /// `LowerQuery` if so.
-    pub(crate) fn try_as_query(&self) -> Result<&LowerQuery, LookupError> {
+    pub(crate) fn try_as_query(&self) -> Result<&LowerQuery, DecodeError> {
         let count = self.queries.len();
         if count != 1 {
-            return Err(LookupError::BadQueryCount(count));
+            return Err(DecodeError::BadQueryCount(count));
         }
         Ok(&self.queries[0])
     }
@@ -266,7 +265,7 @@ pub trait UpdateRequest {
     fn id(&self) -> u16;
 
     /// Zone being updated, this should be the query of a Message
-    fn zone(&self) -> Result<&LowerQuery, LookupError>;
+    fn zone(&self) -> Result<&LowerQuery, DecodeError>;
 
     /// Prerequisites map to the Answer section of a Message
     fn prerequisites(&self) -> &[Record];
@@ -286,7 +285,7 @@ impl UpdateRequest for MessageRequest {
         self.metadata.id
     }
 
-    fn zone(&self) -> Result<&LowerQuery, LookupError> {
+    fn zone(&self) -> Result<&LowerQuery, DecodeError> {
         // RFC 2136 says "the Zone Section is allowed to contain exactly one record."
         self.queries.try_as_query()
     }

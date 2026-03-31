@@ -42,6 +42,10 @@ pub(crate) type DecodeResult<T> = Result<T, DecodeError>;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DecodeError {
+    /// The query had an invalid number of queries
+    #[error("there should only be one query per request, got {0}")]
+    BadQueryCount(usize),
+
     /// DNS key protocol version doesn't have the expected version 3
     #[cfg(feature = "__dnssec")]
     #[error("dns key value unknown, must be 3: {0}")]
